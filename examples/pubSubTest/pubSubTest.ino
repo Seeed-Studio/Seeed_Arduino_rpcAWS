@@ -70,7 +70,7 @@ void loop() {
     if(tick >= 5)   // publish to topic every 5seconds
     {
         tick=0;
-        sprintf(payload,"Hello from hornbill ESP32 : %d",msgCount++);
+        sprintf(payload,"Hello from Wio Terminal : %d",msgCount++);
         if(hornbill.publish(TOPIC_NAME,payload) == 0)
         {        
             Serial.print("Publish Message:");
