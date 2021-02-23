@@ -1,6 +1,8 @@
 #include <AWS_IOT.h>
 #include <rpcWiFi.h>
 
+#include "SPI.h"
+
 // include your personal WiFi and AWS configuration. 
 #include "config.h"
 
