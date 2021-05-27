@@ -47,6 +47,11 @@ pSubCallBackHandler_t subApplCallBackHandler = 0;
 
 TaskHandle_t Handle_aws_iot_task;
 
+IoT_Client_Init_Params mqttInitParams = iotClientInitParamsDefault;
+IoT_Client_Connect_Params connectParams = iotClientConnectParamsDefault;
+
+const size_t stack_size = 3*1024;
+
 void aws_iot_task(void *param);
 
 void iot_subscribe_callback_handler(AWS_IoT_Client *pClient, char *topicName, uint16_t topicNameLen,
@@ -90,13 +95,8 @@ void iot_subscribe_callback_handler(AWS_IoT_Client *pClient, char *topicName, ui
                     const char *aws_root_ca_pem, 
                     const char *certificate_pem_crt, 
                     const char *private_pem_key) {
-        const size_t stack_size = 3*1024;
-        
         strcpy(AWS_IOT_HOST_ADDRESS,hostAddress);
         IoT_Error_t rc = FAILURE;
-
-        IoT_Client_Init_Params mqttInitParams = iotClientInitParamsDefault;
-        IoT_Client_Connect_Params connectParams = iotClientConnectParamsDefault;
 
         IOT_INFO(TAG, "AWS IoT SDK Version %d.%d.%d-%s", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_TAG);
 
@@ -165,6 +165,21 @@ void iot_subscribe_callback_handler(AWS_IoT_Client *pClient, char *topicName, ui
     return rc;
 }
 
+int AWS_IOT::reconnect(void)
+{
+    IoT_Error_t rc = FAILURE;
+
+    if( (&client) && (&mqttInitParams) && (&connectParams) && (&Handle_aws_iot_task) )
+    {
+        // Try to reconnect with at max 5 retries.
+        xTaskNotify(Handle_aws_iot_task, 5, eNoAction);    
+        vTaskDelay(2000 / portTICK_RATE_MS);
+
+        if (aws_iot_mqtt_is_client_connected(&client)) rc = SUCCESS;
+    }
+
+    return rc;
+}	
 
 int AWS_IOT::publish(const char *pubtopic,const char *pubPayLoad)
 {
@@ -205,19 +220,43 @@ int AWS_IOT::subscribe(const char *subTopic, pSubCallBackHandler_t pSubCallBackH
 void aws_iot_task(void *param) {
     IOT_FUNC_ENTRY
 IoT_Error_t rc = SUCCESS;
+    uint32_t ulNotifiedValue = 0;
 
     while(1)
+    //while((NETWORK_ATTEMPTING_RECONNECT == rc || NETWORK_RECONNECTED == rc || SUCCESS == rc))
     {
         //Max time the yield function will wait for read messages
         rc = aws_iot_mqtt_yield(&client, /*200*/ 5);
         
+        if (client.clientStatus.isAutoReconnectEnabled)
+        {
         if(NETWORK_ATTEMPTING_RECONNECT == rc)
         {
             // If the client is attempting to reconnect we will skip the rest of the loop.
+                vTaskDelay(1 / portTICK_RATE_MS);
             continue;
         }
+        }
 
-        
-        vTaskDelay(/*1000*/ 550 / portTICK_RATE_MS);
+        if (xTaskNotifyWait(0, 0, &ulNotifiedValue,  (500 / portTICK_RATE_MS)) == pdTRUE)
+        {
+            rc = aws_iot_mqtt_disconnect(&client);
+            IOT_ERROR(TAG, "disconnected with code %d\n\r", rc);
+            rc = aws_iot_mqtt_init(&client, &mqttInitParams);
+            IOT_ERROR(TAG, "init with code %d\n\r", rc);
+            do {
+                rc = aws_iot_mqtt_connect(&client, &connectParams);
+                if (SUCCESS != rc)
+                {
+                    IOT_ERROR(TAG, "Error(%d) connecting to %s:%d, \n\rTrying to reconnect", rc, mqttInitParams.pHostURL, mqttInitParams.port);   
+                    vTaskDelay(100 / portTICK_RATE_MS);
+                }
+                else
+                {
+                    IOT_INFO(TAG, "Connecting with %s:%d, with code %d", mqttInitParams.pHostURL, mqttInitParams.port, rc);
+                }
+            } while ( (SUCCESS != rc) && ((ulNotifiedValue--) != 0 ));
+        }
     }
+    vTaskDelete(NULL);
 }
