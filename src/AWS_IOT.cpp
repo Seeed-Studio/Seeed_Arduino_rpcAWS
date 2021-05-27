@@ -151,7 +151,7 @@ void iot_subscribe_callback_handler(AWS_IoT_Client *pClient, char *topicName, ui
      *  #AWS_IOT_MQTT_MAX_RECONNECT_WAIT_INTERVAL
      */
     // TODO - bock was commented out - check
-    rc = aws_iot_mqtt_autoreconnect_set_status(&client, false);
+    rc = aws_iot_mqtt_autoreconnect_set_status(&client, true);
     if(SUCCESS != rc) {
         IOT_ERROR(TAG, "Unable to set Auto Reconnect to true - %d", rc);
         abort();
@@ -226,9 +226,9 @@ IoT_Error_t rc = SUCCESS;
     //while((NETWORK_ATTEMPTING_RECONNECT == rc || NETWORK_RECONNECTED == rc || SUCCESS == rc))
     {
         //Max time the yield function will wait for read messages
-        rc = aws_iot_mqtt_yield(&client, /*200*/ 5);
+        rc = aws_iot_mqtt_yield(&client, /*200*/ 100);
         
-        if (client.clientStatus.isAutoReconnectEnabled)
+        //if (client.clientStatus.isAutoReconnectEnabled)
         {
         if(NETWORK_ATTEMPTING_RECONNECT == rc)
         {
