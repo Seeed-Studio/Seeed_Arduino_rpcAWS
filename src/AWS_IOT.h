@@ -40,6 +40,7 @@ class AWS_IOT{
                 const char *aws_root_ca_pem, 
                 const char *certificate_pem_crt, 
                 const char *private_pem_key);
+    bool connected(void);
     int reconnect(void);
     int publish(const char *pubtopic, const char *pubPayLoad);
     int subscribe(const char *subTopic, pSubCallBackHandler_t pSubCallBackHandler);

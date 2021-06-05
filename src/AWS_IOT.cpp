@@ -165,6 +165,17 @@ void iot_subscribe_callback_handler(AWS_IoT_Client *pClient, char *topicName, ui
     return rc;
 }
 
+bool AWS_IOT::connected(void)
+{
+    bool rc = false;
+
+    if( (&client) )
+    {
+        rc = aws_iot_mqtt_is_client_connected(&client);
+    }
+    return rc;
+}	
+
 int AWS_IOT::reconnect(void)
 {
     IoT_Error_t rc = FAILURE;
