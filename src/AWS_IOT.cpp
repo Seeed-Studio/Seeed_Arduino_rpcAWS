@@ -45,7 +45,7 @@ AWS_IoT_Client client;
 IoT_Publish_Message_Params paramsQOS0;
 pSubCallBackHandler_t subApplCallBackHandler = 0;
 
-TaskHandle_t Handle_aws_iot_task;
+TaskHandle_t Handle_aws_iot_task = NULL;
 
 IoT_Client_Init_Params mqttInitParams = iotClientInitParamsDefault;
 IoT_Client_Connect_Params connectParams = iotClientConnectParamsDefault;
@@ -100,6 +100,12 @@ void iot_subscribe_callback_handler(AWS_IoT_Client *pClient, char *topicName, ui
 
         IOT_INFO(TAG, "AWS IoT SDK Version %d.%d.%d-%s", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_TAG);
 
+    if (Handle_aws_iot_task != NULL)
+    {
+        vTaskDelete(Handle_aws_iot_task);
+        Handle_aws_iot_task = NULL;
+    }
+
         mqttInitParams.enableAutoReconnect = false; // We enable this later below
         mqttInitParams.pHostURL = AWS_IOT_HOST_ADDRESS;
         mqttInitParams.port = CONFIG_AWS_IOT_MQTT_PORT;
@@ -135,26 +141,24 @@ void iot_subscribe_callback_handler(AWS_IoT_Client *pClient, char *topicName, ui
 
     IOT_INFO(TAG, "Connecting to AWS...");
 
-    do {
         rc = aws_iot_mqtt_connect(&client, &connectParams);
-        
         if(SUCCESS != rc) {
-            IOT_ERROR(TAG, "Error(%d) connecting to %s:%d, \n\rTrying to reconnect", rc, mqttInitParams.pHostURL, mqttInitParams.port);   
+		IOT_ERROR(TAG, "Error(%d) connecting to %s:%d, \n\r", rc, mqttInitParams.pHostURL, mqttInitParams.port);
+        aws_iot_mqtt_disconnect(&client);
+        aws_iot_mqtt_free(&client);
+        return rc; //abort();
         }
         
-    } while(SUCCESS != rc);
-  
-
     /*
      * Enable Auto Reconnect functionality. Minimum and Maximum time of Exponential backoff are set in aws_iot_config.h
      *  #AWS_IOT_MQTT_MIN_RECONNECT_WAIT_INTERVAL
      *  #AWS_IOT_MQTT_MAX_RECONNECT_WAIT_INTERVAL
      */
     // TODO - bock was commented out - check
-    rc = aws_iot_mqtt_autoreconnect_set_status(&client, true);
+    rc = aws_iot_mqtt_autoreconnect_set_status(&client, false);
     if(SUCCESS != rc) {
-        IOT_ERROR(TAG, "Unable to set Auto Reconnect to true - %d", rc);
-        abort();
+        IOT_ERROR(TAG, "Unable to set Auto Reconnect to false - %d", rc);
+        return rc; //abort();
     }    
      uint32_t freeheap = xPortGetFreeHeapSize();
     if(rc == SUCCESS)
@@ -253,6 +257,8 @@ IoT_Error_t rc = SUCCESS;
         {
             rc = aws_iot_mqtt_disconnect(&client);
             IOT_ERROR(TAG, "disconnected with code %d\n\r", rc);
+            rc = aws_iot_mqtt_free(&client);
+            IOT_ERROR(TAG, "client free with code %d\n\r", rc);            
             rc = aws_iot_mqtt_init(&client, &mqttInitParams);
             IOT_ERROR(TAG, "init with code %d\n\r", rc);
             do {
