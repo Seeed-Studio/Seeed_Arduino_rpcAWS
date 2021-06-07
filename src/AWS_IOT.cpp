@@ -102,8 +102,10 @@ void iot_subscribe_callback_handler(AWS_IoT_Client *pClient, char *topicName, ui
 
     if (Handle_aws_iot_task != NULL)
     {
-        vTaskDelete(Handle_aws_iot_task);
-        Handle_aws_iot_task = NULL;
+        xTaskNotify(Handle_aws_iot_task, 5, eNoAction);    
+        vTaskDelay(5000 / portTICK_RATE_MS);
+        if (aws_iot_mqtt_is_client_connected(&client)) rc = SUCCESS;
+        return rc;
     }
 
         mqttInitParams.enableAutoReconnect = false; // We enable this later below
@@ -266,7 +268,7 @@ IoT_Error_t rc = SUCCESS;
                 if (SUCCESS != rc)
                 {
                     IOT_ERROR(TAG, "Error(%d) connecting to %s:%d, \n\rTrying to reconnect", rc, mqttInitParams.pHostURL, mqttInitParams.port);   
-                    vTaskDelay(100 / portTICK_RATE_MS);
+                    vTaskDelay(500 / portTICK_RATE_MS);
                 }
                 else
                 {
